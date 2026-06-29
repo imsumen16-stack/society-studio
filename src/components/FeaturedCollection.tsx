@@ -202,8 +202,8 @@ export default function FeaturedCollection({
 
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
-    const defaultSize = product.sizes[0] || 'M';
-    const defaultColor = product.colors[0];
+    const defaultSize = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M';
+    const defaultColor = product.colors && product.colors.length > 0 ? product.colors[0] : { name: "CHARCOAL BLACK", hex: "#1E1E1E" };
     onAddToCart(product, defaultSize, defaultColor.name, defaultColor.hex);
 
     setIsAdding((prev) => ({ ...prev, [product.id]: true }));

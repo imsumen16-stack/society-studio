@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ShoppingBag, Search, ShieldCheck, Menu, X, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CartItem, SocietyPass } from '../types';
+import { ApiClient } from '../lib/api';
 
 interface HeaderProps {
   cart: CartItem[];
@@ -32,6 +33,16 @@ export default function Header({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [localSearchVal, setLocalSearchVal] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    const checkUser = () => {
+      setCurrentUser(ApiClient.getUser());
+    };
+    checkUser();
+    const interval = setInterval(checkUser, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const searchVal = propSearchVal !== undefined ? propSearchVal : localSearchVal;
 
@@ -192,16 +203,18 @@ export default function Header({
 
             {/* Society Entrance / Premium Access Button */}
             <button
-              onClick={savedPass ? onOpenPassViewer : onOpenEnterSociety}
-              className={`flex items-center space-x-1 transition-colors cursor-pointer font-mono text-[9px] tracking-widest uppercase hidden md:flex border px-2.5 py-1 rounded-sm ${
-                scrolled
-                  ? 'border-black/10 text-neutral-600 hover:text-black hover:border-black'
-                  : 'border-white/10 text-neutral-400 hover:text-white'
+              onClick={onOpenEnterSociety}
+              className={`flex items-center space-x-1.5 transition-colors cursor-pointer font-mono text-[9px] tracking-widest uppercase hidden md:flex border px-2.5 py-1 rounded-sm ${
+                currentUser
+                  ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10'
+                  : scrolled
+                    ? 'border-black/10 text-neutral-600 hover:text-black hover:border-black'
+                    : 'border-white/10 text-neutral-400 hover:text-white'
               }`}
-              title={savedPass ? "View Active Society Pass" : "Access Portal"}
+              title="Access Portal"
             >
-              <User className="h-3 w-3" />
-              <span>ACCESS</span>
+              <User className={`h-3 w-3 ${currentUser ? 'text-emerald-400 animate-pulse' : ''}`} />
+              <span>{currentUser ? `${currentUser.role}_` : 'ACCESS'}</span>
             </button>
 
             {/* Bag Button */}
@@ -305,11 +318,11 @@ export default function Header({
                     <button
                       onClick={() => {
                         setMobileMenuOpen(false);
-                        onOpenPassViewer();
+                        onOpenEnterSociety();
                       }}
                       className="text-left text-emerald-400 hover:text-white transition-colors cursor-pointer py-1 font-mono text-xs tracking-widest uppercase flex items-center space-x-1"
                     >
-                      <span>● MY PASS ACTIVE</span>
+                      <span>● MY PROFILE / ACCESS</span>
                     </button>
                   ) : (
                     <button

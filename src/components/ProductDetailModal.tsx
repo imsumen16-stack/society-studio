@@ -21,7 +21,7 @@ export default function ProductDetailModal({
   if (!product) return null;
 
   const handleAdd = () => {
-    const defaultColor = product.colors[0];
+    const defaultColor = product.colors && product.colors.length > 0 ? product.colors[0] : { name: "CHARCOAL BLACK", hex: "#1E1E1E" };
     onAddToCart(product, selectedSize, defaultColor.name, defaultColor.hex);
     
     setAddedNotify(true);

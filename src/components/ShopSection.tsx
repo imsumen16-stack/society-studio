@@ -25,7 +25,7 @@ export default function ShopSection({
   const handleQuickAdd = (e: React.MouseEvent, product: Product) => {
     e.stopPropagation(); // Avoid opening the details modal
     const size = selectedSizes[product.id] || 'M'; // Default to medium
-    const defaultColor = product.colors[0];
+    const defaultColor = product.colors && product.colors.length > 0 ? product.colors[0] : { name: "CHARCOAL BLACK", hex: "#1E1E1E" };
     onAddToCart(product, size, defaultColor.name, defaultColor.hex);
 
     setAddedItems((prev) => ({ ...prev, [product.id]: true }));
@@ -172,7 +172,7 @@ export default function ShopSection({
                       {product.name}
                     </h4>
                     <p className="text-[8px] md:text-[10px] font-mono tracking-widest uppercase text-neutral-500">
-                      GSM: {product.gsm} / {product.colors[0].name}
+                      GSM: {product.gsm} / {(product.colors && product.colors.length > 0 ? product.colors[0].name : "CHARCOAL BLACK")}
                     </p>
                   </div>
                   <span className="text-xs md:text-sm tracking-widest text-neutral-900 font-mono font-medium shrink-0">

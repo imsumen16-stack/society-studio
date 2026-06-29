@@ -204,8 +204,8 @@ export default function DolengaPage({ onBackToHome, onAddToCart, onOpenCart, car
   const totalCartItems = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   const handleAddWithDetails = (product: Product) => {
-    const size = selectedSize[product.id] || product.sizes[0];
-    const colorObj = selectedColor[product.id] || product.colors[0];
+    const size = selectedSize[product.id] || (product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M');
+    const colorObj = selectedColor[product.id] || (product.colors && product.colors.length > 0 ? product.colors[0] : { name: "CHARCOAL BLACK", hex: "#1E1E1E", class: "bg-[#1E1E1E]" });
     onAddToCart(product, size, colorObj.name, colorObj.hex);
     
     // Quick success animation check
@@ -542,8 +542,8 @@ export default function DolengaPage({ onBackToHome, onAddToCart, onOpenCart, car
               className="flex gap-6 w-[125%] md:w-[133%]"
             >
               {DOLENGA_PRODUCTS.map((prod) => {
-                const currentSize = selectedSize[prod.id] || prod.sizes[0];
-                const colorObj = selectedColor[prod.id] || prod.colors[0];
+                const currentSize = selectedSize[prod.id] || (prod.sizes && prod.sizes.length > 0 ? prod.sizes[0] : 'M');
+                const colorObj = selectedColor[prod.id] || (prod.colors && prod.colors.length > 0 ? prod.colors[0] : { name: "CHARCOAL BLACK", hex: "#1E1E1E", class: "bg-[#1E1E1E]" });
                 const isSizeSelectorOpen = sizeSelectorOpenPid === prod.id;
 
                 return (

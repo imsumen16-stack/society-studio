@@ -18,8 +18,8 @@ export default function DolengaProductDetail({
   allProducts,
   onSelectProduct
 }: DolengaProductDetailProps) {
-  const [selectedSize, setSelectedSize] = useState<string>(product.sizes[0]);
-  const [selectedColor, setSelectedColor] = useState(product.colors[0]);
+  const [selectedSize, setSelectedSize] = useState<string>(product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M');
+  const [selectedColor, setSelectedColor] = useState(product.colors && product.colors.length > 0 ? product.colors[0] : { name: "CHARCOAL BLACK", hex: "#1E1E1E", class: "bg-[#1E1E1E]" });
   const [activeImage, setActiveImage] = useState<string>(product.imagePrimary);
   const [isAdding, setIsAdding] = useState(false);
   const [addedSuccess, setAddedSuccess] = useState(false);
@@ -190,7 +190,7 @@ export default function DolengaProductDetail({
               COLOR: <span className="text-neutral-900 font-extrabold">{selectedColor.name}</span>
             </div>
             <div className="flex items-center space-x-2.5">
-              {product.colors.map((c) => (
+              {(product.colors && product.colors.length > 0 ? product.colors : [{ name: "CHARCOAL BLACK", hex: "#1E1E1E", class: "bg-[#1E1E1E]" }]).map((c) => (
                 <button
                   key={c.name}
                   onClick={() => setSelectedColor(c)}

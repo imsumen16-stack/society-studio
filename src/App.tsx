@@ -18,6 +18,8 @@ import PassViewerModal from './components/PassViewerModal';
 import Footer from './components/Footer';
 import FeaturedCollection from './components/FeaturedCollection';
 import BlogDrawer from './components/BlogDrawer';
+import AccessPortalModal from './components/AccessPortalModal';
+import { ApiClient } from './lib/api';
 
 
 // Generated Asset Registry Paths
@@ -129,6 +131,7 @@ export default function App() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [savedPass, setSavedPass] = useState<SocietyPass | null>(null);
   const [currentPage, setCurrentPage] = useState<'home' | 'dolenga'>('home');
+  const [productsList, setProductsList] = useState<Product[]>(PRODUCTS);
 
   // Panel toggles
   const [cartOpen, setCartOpen] = useState(false);
@@ -160,10 +163,41 @@ export default function App() {
     }
   }, []);
 
-  // Save changes back to localStorage
+  // Sync products dynamically from real-time database backend
+  useEffect(() => {
+    const fetchProds = async () => {
+      try {
+        const data = await ApiClient.getProducts();
+        if (data && data.length > 0) {
+          setProductsList(data);
+        }
+      } catch (err) {
+        console.error('Failed fetching products from PostgreSQL backend database. Using local static presets fallback.', err);
+      }
+    };
+    fetchProds();
+
+    const interval = setInterval(fetchProds, 8000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Save changes back to localStorage & sync database backend
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
     localStorage.setItem('society_studios_bag', JSON.stringify(newCart));
+    try {
+      const itemsData = newCart.map(it => ({
+        id: it.id,
+        productId: it.product.id,
+        selectedSize: it.selectedSize,
+        selectedColor: it.selectedColor,
+        selectedColorHex: it.selectedColorHex,
+        quantity: it.quantity
+      }));
+      ApiClient.saveCartRemote(itemsData);
+    } catch (e) {
+      console.error('Failed saving remote cart:', e);
+    }
   };
 
   const handleAddToCart = (product: Product, size: string, color: string, colorHex: string) => {
@@ -258,7 +292,7 @@ export default function App() {
     }
   };
 
-  const filteredProducts = PRODUCTS.filter((product) => {
+  const filteredProducts = productsList.filter((product) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -308,7 +342,7 @@ export default function App() {
 
               {/* Interactive Uniform detailed configuration */}
               <FeaturedUniform
-                products={PRODUCTS}
+                products={productsList}
                 onAddToCart={handleAddToCart}
                 onOpenProductDetail={(prod) => setActiveProduct(prod)}
                 creamImage={PRODUCT_CREAM}
@@ -392,74 +426,13 @@ export default function App() {
             onAddToCart={handleAddToCart}
           />
 
-          {/* SANDBOX ENTRY PASSCODE PORTAL MODAL */}
-          <AnimatePresence>
-            {societyModalOpen && (
-              <div className="fixed inset-0 z-[9985] flex items-center justify-center p-4">
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.8 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setSocietyModalOpen(false)}
-                  className="absolute inset-0 bg-black/95 backdrop-blur-sm"
-                />
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className="relative w-full max-w-[420px] bg-[#0E0E0E] text-white border border-white/10 p-6 md:p-8 rounded-sm select-none font-sans"
-                >
-                  <button
-                    onClick={() => setSocietyModalOpen(false)}
-                    className="absolute top-4 right-4 text-neutral-400 hover:text-white transition-all cursor-pointer"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-
-                  <div className="space-y-4 pt-4 text-center">
-                    <div className="h-10 w-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center mx-auto text-neutral-300">
-                      <ShieldCheck className="h-5 w-5" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <h4 className="font-sans font-bold text-lg tracking-tight uppercase">
-                        REQUEST_MEMBERSHIP_ENTRY
-                      </h4>
-                      <p className="text-[10px] font-mono tracking-wider text-neutral-500 uppercase leading-relaxed max-w-[300px] mx-auto">
-                        Official society passes are compiled automatically post-checkout. To mock pass issuance instantly, enters bypass code: <span className="text-white font-semibold underline">MOCK_SOCIETY</span>.
-                      </p>
-                    </div>
-
-                    <form onSubmit={handleGateSubmit} className="space-y-4 pt-4">
-                      <input
-                        type="text"
-                        required
-                        value={gateCode}
-                        onChange={(e) => setGateCode(e.target.value)}
-                        placeholder="ENTER_SOCIETY_PASSCODE"
-                        className="w-full bg-neutral-900 border border-white/10 focus:border-white focus:outline-none py-3 px-4 text-xs tracking-[0.2em] font-mono text-center uppercase rounded-sm text-white"
-                      />
-
-                      <button
-                        type="submit"
-                        className="w-full bg-white text-black hover:bg-neutral-800 hover:text-white transition-all py-3 text-xs font-semibold tracking-[0.25em] uppercase h-11 cursor-pointer flex items-center justify-center space-x-1"
-                      >
-                        SUBMIT_VERIFY_
-                      </button>
-
-                      {gateFeedback && (
-                        <p className={`text-[9px] font-mono tracking-widest uppercase ${
-                          gateFeedback.includes('SUCCESS') ? 'text-emerald-400' : 'text-red-500'
-                        }`}>
-                          {gateFeedback}
-                        </p>
-                      )}
-                    </form>
-                  </div>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
+          {/* SECURE INTEGRATED MEMBER & ADMIN PORTAL CONSOLE */}
+          <AccessPortalModal
+            isOpen={societyModalOpen}
+            onClose={() => setSocietyModalOpen(false)}
+            onOrderSuccess={handleOrderComplete}
+            onOpenPassViewer={() => setPassViewerOpen(true)}
+          />
 
         </div>
       )}
