@@ -1,7 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs, setLogLevel } from 'firebase/firestore';
+
+// Set log level to 'error' to suppress benign idle connection stream warning logs
+setLogLevel('error');
 
 // Define DB file path
 const DB_DIR = path.join(process.cwd(), 'data');
@@ -360,6 +363,14 @@ export class Database {
             name: 'SYSTEM ADMIN',
             role: 'ADMIN',
             createdAt: new Date().toISOString()
+          },
+          {
+            id: 'u-admin-new',
+            email: 'admin@society.studio',
+            passwordHash: '$2a$10$WstX8m6p.74F3lW/p8IqAeo79T1Yk7/R69p8Cj9h4pC/W6uJEqvSm', // admin123
+            name: 'PORTAL ADMIN',
+            role: 'ADMIN',
+            createdAt: new Date().toISOString()
           }
         ],
         products: SEED_PRODUCTS,
@@ -372,6 +383,34 @@ export class Database {
         contactMessages: [],
         newsletterSubscribers: []
       };
+      this.save();
+    } else {
+      // Self-healing for admin credentials in existing database files
+      if (!this.data.users) {
+        this.data.users = [];
+      }
+      const hasStudiosAdmin = this.data.users.some(u => u.email.toLowerCase() === 'admin@society.studios');
+      if (!hasStudiosAdmin) {
+        this.data.users.push({
+          id: 'u-admin',
+          email: 'admin@society.studios',
+          passwordHash: '$2a$10$WstX8m6p.74F3lW/p8IqAeo79T1Yk7/R69p8Cj9h4pC/W6uJEqvSm', // admin123
+          name: 'SYSTEM ADMIN',
+          role: 'ADMIN',
+          createdAt: new Date().toISOString()
+        });
+      }
+      const hasStudioAdmin = this.data.users.some(u => u.email.toLowerCase() === 'admin@society.studio');
+      if (!hasStudioAdmin) {
+        this.data.users.push({
+          id: 'u-admin-new',
+          email: 'admin@society.studio',
+          passwordHash: '$2a$10$WstX8m6p.74F3lW/p8IqAeo79T1Yk7/R69p8Cj9h4pC/W6uJEqvSm', // admin123
+          name: 'PORTAL ADMIN',
+          role: 'ADMIN',
+          createdAt: new Date().toISOString()
+        });
+      }
       this.save();
     }
   }
@@ -495,6 +534,38 @@ export class Database {
           contactMessages: contactMessages.length > 0 ? contactMessages : this.data!.contactMessages,
           newsletterSubscribers: newsletterSubscribers.length > 0 ? newsletterSubscribers : this.data!.newsletterSubscribers
         };
+
+        // Self-healing of admin accounts after pulling from Firestore
+        if (!this.data.users) {
+          this.data.users = [];
+        }
+        const hasStudiosAdmin = this.data.users.some(u => u.email.toLowerCase() === 'admin@society.studios');
+        if (!hasStudiosAdmin) {
+          const u = {
+            id: 'u-admin',
+            email: 'admin@society.studios',
+            passwordHash: '$2a$10$WstX8m6p.74F3lW/p8IqAeo79T1Yk7/R69p8Cj9h4pC/W6uJEqvSm', // admin123
+            name: 'SYSTEM ADMIN',
+            role: 'ADMIN' as const,
+            createdAt: new Date().toISOString()
+          };
+          this.data.users.push(u);
+          await this.saveToFirestore('users', u.id, u);
+        }
+        const hasStudioAdmin = this.data.users.some(u => u.email.toLowerCase() === 'admin@society.studio');
+        if (!hasStudioAdmin) {
+          const u = {
+            id: 'u-admin-new',
+            email: 'admin@society.studio',
+            passwordHash: '$2a$10$WstX8m6p.74F3lW/p8IqAeo79T1Yk7/R69p8Cj9h4pC/W6uJEqvSm', // admin123
+            name: 'PORTAL ADMIN',
+            role: 'ADMIN' as const,
+            createdAt: new Date().toISOString()
+          };
+          this.data.users.push(u);
+          await this.saveToFirestore('users', u.id, u);
+        }
+
         // Write cloud state back to disk
         fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
         console.log('[FIREBASE] Cloud sync successfully populated local cache.');

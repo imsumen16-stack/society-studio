@@ -146,7 +146,7 @@ export default function AccessPortalModal({
     setAuthError('');
     setAuthSuccess('');
     try {
-      const data = await ApiClient.login({ email: 'admin@society.studios', password: 'admin123' });
+      const data = await ApiClient.login({ email: 'admin@society.studio', password: 'society_admin_2026' });
       setCurrentUser(data.user);
       setAuthSuccess('ADMIN ACCESS GRANTED. SECURE PORTAL DEPLOYED.');
       setEmail('');
@@ -454,8 +454,8 @@ export default function AccessPortalModal({
                       <span>⚡ DOCK_ADMIN_DASHBOARD</span>
                     </button>
                     <div className="flex justify-between text-[7px] font-mono text-neutral-600 px-1">
-                      <span>USER: admin@society.studios</span>
-                      <span>PASS: admin123</span>
+                      <span>USER: admin@society.studio</span>
+                      <span>PASS: society_admin_2026</span>
                     </div>
                   </div>
                 </form>
