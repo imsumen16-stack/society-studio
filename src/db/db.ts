@@ -1,9 +1,39 @@
 import fs from 'fs';
 import path from 'path';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 
 // Define DB file path
 const DB_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'db.json');
+
+// Initialize Firebase
+let db: any = null;
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    const firebaseApp = initializeApp({
+      apiKey: config.apiKey,
+      authDomain: config.authDomain,
+      projectId: config.projectId,
+      storageBucket: config.storageBucket,
+      messagingSenderId: config.messagingSenderId,
+      appId: config.appId
+    });
+    if (config.firestoreDatabaseId) {
+      db = getFirestore(firebaseApp, config.firestoreDatabaseId);
+    } else {
+      db = getFirestore(firebaseApp);
+    }
+    console.log('[FIREBASE] Connected to Firestore successfully.');
+  } else {
+    console.warn('[FIREBASE] firebase-applet-config.json not found. Using local JSON DB.');
+  }
+} catch (err) {
+  console.error('[FIREBASE] Initialization failed:', err);
+}
+
 
 // Interface declarations matching all requested entities
 export interface User {
@@ -351,6 +381,129 @@ export class Database {
     fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
   }
 
+  // Firestore sync helpers
+  private static async fetchCollection(colName: string): Promise<any[]> {
+    if (!db) return [];
+    try {
+      const colRef = collection(db, colName);
+      const snapshot = await getDocs(colRef);
+      const items: any[] = [];
+      snapshot.forEach((docRef) => {
+        items.push({ id: docRef.id, ...docRef.data() });
+      });
+      return items;
+    } catch (err) {
+      console.error(`[FIREBASE] Failed to fetch collection ${colName}:`, err);
+      return [];
+    }
+  }
+
+  private static async saveToFirestore(colName: string, docId: string, data: any) {
+    if (!db) return;
+    try {
+      const docRef = doc(db, colName, docId);
+      await setDoc(docRef, data, { merge: true });
+    } catch (err) {
+      console.error(`[FIREBASE] Error writing to ${colName}/${docId}:`, err);
+    }
+  }
+
+  private static async deleteFromFirestore(colName: string, docId: string) {
+    if (!db) return;
+    try {
+      const docRef = doc(db, colName, docId);
+      await deleteDoc(docRef);
+    } catch (err) {
+      console.error(`[FIREBASE] Error deleting from ${colName}/${docId}:`, err);
+    }
+  }
+
+  private static async seedToFirestore() {
+    if (!db || !this.data) return;
+    try {
+      console.log('[FIREBASE] Seeding default records to Firestore...');
+      for (const u of this.data.users) {
+        await this.saveToFirestore('users', u.id, u);
+      }
+      for (const p of this.data.products) {
+        await this.saveToFirestore('products', p.id, p);
+      }
+      for (const c of this.data.carts) {
+        await this.saveToFirestore('carts', c.userId, c);
+      }
+      for (const w of this.data.wishlists) {
+        await this.saveToFirestore('wishlists', w.userId, w);
+      }
+      for (const o of this.data.orders) {
+        await this.saveToFirestore('orders', o.id, o);
+      }
+      for (const b of this.data.blogPosts) {
+        await this.saveToFirestore('blogPosts', b.id, b);
+      }
+      for (const r of this.data.reviews) {
+        await this.saveToFirestore('reviews', r.id, r);
+      }
+      for (const cp of this.data.coupons) {
+        await this.saveToFirestore('coupons', cp.code, cp);
+      }
+      for (const msg of this.data.contactMessages) {
+        await this.saveToFirestore('contactMessages', msg.id, msg);
+      }
+      for (const s of this.data.newsletterSubscribers) {
+        await this.saveToFirestore('newsletterSubscribers', s.id, s);
+      }
+      console.log('[FIREBASE] Seeding finished successfully.');
+    } catch (err) {
+      console.error('[FIREBASE] Seeding failed:', err);
+    }
+  }
+
+  public static async loadFromFirestore() {
+    this.init(); // ensure directory structure is set up
+    if (!db) {
+      console.log('[FIREBASE] Offline: Firestore database not initialized. Continuing with local file store.');
+      return;
+    }
+
+    try {
+      console.log('[FIREBASE] Syncing offline file store with cloud database state...');
+      const users = await this.fetchCollection('users');
+      const products = await this.fetchCollection('products');
+      const carts = await this.fetchCollection('carts');
+      const wishlists = await this.fetchCollection('wishlists');
+      const orders = await this.fetchCollection('orders');
+      const blogPosts = await this.fetchCollection('blogPosts');
+      const reviews = await this.fetchCollection('reviews');
+      const coupons = await this.fetchCollection('coupons');
+      const contactMessages = await this.fetchCollection('contactMessages');
+      const newsletterSubscribers = await this.fetchCollection('newsletterSubscribers');
+
+      if (products.length === 0 && users.length === 0) {
+        console.log('[FIREBASE] Cloud database empty. Triggering bootstrap seeding...');
+        await this.seedToFirestore();
+      } else {
+        // Update local memory with cloud state
+        this.data = {
+          users: users.length > 0 ? users : this.data!.users,
+          products: products.length > 0 ? products : this.data!.products,
+          carts: carts.length > 0 ? carts : this.data!.carts,
+          wishlists: wishlists.length > 0 ? wishlists : this.data!.wishlists,
+          orders: orders.length > 0 ? orders : this.data!.orders,
+          blogPosts: blogPosts.length > 0 ? blogPosts : this.data!.blogPosts,
+          reviews: reviews.length > 0 ? reviews : this.data!.reviews,
+          coupons: coupons.length > 0 ? coupons : this.data!.coupons,
+          contactMessages: contactMessages.length > 0 ? contactMessages : this.data!.contactMessages,
+          newsletterSubscribers: newsletterSubscribers.length > 0 ? newsletterSubscribers : this.data!.newsletterSubscribers
+        };
+        // Write cloud state back to disk
+        fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+        console.log('[FIREBASE] Cloud sync successfully populated local cache.');
+      }
+    } catch (err) {
+      console.error('[FIREBASE] Database replication failed on start. Resorting to disk files:', err);
+    }
+  }
+
   // API Methods
   public static getUsers(): User[] {
     this.init();
@@ -361,6 +514,7 @@ export class Database {
     this.init();
     this.data!.users.push(user);
     this.save();
+    this.saveToFirestore('users', user.id, user);
   }
 
   public static getProducts(): Product[] {
@@ -372,18 +526,24 @@ export class Database {
     this.init();
     this.data!.products.unshift(product);
     this.save();
+    this.saveToFirestore('products', product.id, product);
   }
 
   public static updateProduct(id: string, updated: Partial<Product>) {
     this.init();
     this.data!.products = this.data!.products.map(p => p.id === id ? { ...p, ...updated } : p);
     this.save();
+    const updatedProd = this.data!.products.find(p => p.id === id);
+    if (updatedProd) {
+      this.saveToFirestore('products', id, updatedProd);
+    }
   }
 
   public static deleteProduct(id: string) {
     this.init();
     this.data!.products = this.data!.products.filter(p => p.id !== id);
     this.save();
+    this.deleteFromFirestore('products', id);
   }
 
   public static getCart(userId: string): Cart {
@@ -393,6 +553,7 @@ export class Database {
       cart = { userId, items: [] };
       this.data!.carts.push(cart);
       this.save();
+      this.saveToFirestore('carts', userId, cart);
     }
     return cart;
   }
@@ -406,6 +567,7 @@ export class Database {
       this.data!.carts.push({ userId, items });
     }
     this.save();
+    this.saveToFirestore('carts', userId, { userId, items });
   }
 
   public static getWishlist(userId: string): Wishlist {
@@ -415,6 +577,7 @@ export class Database {
       wishlist = { userId, productIds: [] };
       this.data!.wishlists.push(wishlist);
       this.save();
+      this.saveToFirestore('wishlists', userId, wishlist);
     }
     return wishlist;
   }
@@ -428,6 +591,7 @@ export class Database {
       this.data!.wishlists.push({ userId, productIds });
     }
     this.save();
+    this.saveToFirestore('wishlists', userId, { userId, productIds });
   }
 
   public static getOrders(): Order[] {
@@ -439,6 +603,7 @@ export class Database {
     this.init();
     this.data!.orders.unshift(order);
     this.save();
+    this.saveToFirestore('orders', order.id, order);
   }
 
   public static updateOrderStatus(id: string, status: Order['status'], paymentStatus?: Order['paymentStatus']) {
@@ -454,6 +619,10 @@ export class Database {
       return o;
     });
     this.save();
+    const updatedOrder = this.data!.orders.find(o => o.id === id);
+    if (updatedOrder) {
+      this.saveToFirestore('orders', id, updatedOrder);
+    }
   }
 
   public static getBlogPosts(): BlogPost[] {
@@ -465,18 +634,24 @@ export class Database {
     this.init();
     this.data!.blogPosts.unshift(post);
     this.save();
+    this.saveToFirestore('blogPosts', post.id, post);
   }
 
   public static updateBlogPost(id: string, updated: Partial<BlogPost>) {
     this.init();
     this.data!.blogPosts = this.data!.blogPosts.map(bp => bp.id === id ? { ...bp, ...updated } : bp);
     this.save();
+    const updatedPost = this.data!.blogPosts.find(bp => bp.id === id);
+    if (updatedPost) {
+      this.saveToFirestore('blogPosts', id, updatedPost);
+    }
   }
 
   public static deleteBlogPost(id: string) {
     this.init();
     this.data!.blogPosts = this.data!.blogPosts.filter(bp => bp.id !== id);
     this.save();
+    this.deleteFromFirestore('blogPosts', id);
   }
 
   public static getReviews(productId?: string): Review[] {
@@ -491,6 +666,7 @@ export class Database {
     this.init();
     this.data!.reviews.unshift(review);
     this.save();
+    this.saveToFirestore('reviews', review.id, review);
   }
 
   public static getCoupons(): Coupon[] {
@@ -507,12 +683,14 @@ export class Database {
     this.init();
     this.data!.coupons.push(coupon);
     this.save();
+    this.saveToFirestore('coupons', coupon.code, coupon);
   }
 
   public static addContactMessage(msg: ContactMessage) {
     this.init();
     this.data!.contactMessages.unshift(msg);
     this.save();
+    this.saveToFirestore('contactMessages', msg.id, msg);
   }
 
   public static getContactMessages(): ContactMessage[] {
@@ -525,6 +703,7 @@ export class Database {
     if (!this.data!.newsletterSubscribers.some(s => s.email.toLowerCase() === sub.email.toLowerCase())) {
       this.data!.newsletterSubscribers.push(sub);
       this.save();
+      this.saveToFirestore('newsletterSubscribers', sub.id, sub);
     }
   }
 

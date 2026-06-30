@@ -1,18 +1,40 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
 import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import morgan from 'morgan';
+import fs from 'fs';
+import { rateLimit } from 'express-rate-limit';
 import { createServer as createViteServer } from 'vite';
 import { Database, User, Product, Order, BlogPost, Review, Coupon } from './src/db/db.js';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'society_studios_super_secure_vault_code_xyz_789';
 
-// Setup Middlewares
-app.use(cors());
+// Request logging
+app.use(morgan('combined'));
+
+// Rate limiting for API endpoints
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 200, // limit each IP to 200 requests per window
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/api/', limiter);
+
+// Setup Middlewares with credentials and origin reflection for CORS
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Helmet configuration adapted to handle local canvas frames and resources without blocking
@@ -524,6 +546,13 @@ app.get('/api/admin/newsletter', requireAdmin, (req: any, res: any) => {
 // ==========================================
 
 async function start() {
+  // Sync state with cloud database (Firestore)
+  try {
+    await Database.loadFromFirestore();
+  } catch (err) {
+    console.error('[FIREBASE] Failed to load data from Firestore during startup:', err);
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -532,11 +561,35 @@ async function start() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        const indexPath = path.join(distPath, 'index.html');
+        if (fs.existsSync(indexPath)) {
+          res.sendFile(indexPath);
+        } else {
+          res.json({ message: 'Society Studios API - Online (Frontend is hosted on Netlify)' });
+        }
+      });
+    } else {
+      app.get('*', (req, res) => {
+        res.json({ message: 'Society Studios API - Online (Frontend is hosted on Netlify)' });
+      });
+    }
   }
+
+  // 404 API handler
+  app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: 'API endpoint not found.' });
+  });
+
+  // Global error handler
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error('[SERVER ERROR]', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'An unexpected internal server error occurred.'
+    });
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[SOCIETY BACKEND] Online & listening on port ${PORT}`);

@@ -1,5 +1,17 @@
 // Frontend REST API Client wrappers
-export const API_URL = '';
+const getApiUrl = (): string => {
+  const envUrl = (import.meta as any).env?.VITE_API_URL;
+  if (envUrl) {
+    return envUrl.endsWith('/') ? envUrl.slice(0, -1) : envUrl;
+  }
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.run.app')) {
+    return '';
+  }
+  return 'https://ais-pre-o3cc2z6335vxmue6hddp6v-1017130358436.asia-southeast1.run.app';
+};
+
+export const API_URL = getApiUrl();
 
 export interface ApiUser {
   id: string;
